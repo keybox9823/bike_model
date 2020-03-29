@@ -11,6 +11,12 @@ Edit History
     3/28/2019
         First Day - main structure is sketched out, constant rider power works
         grade works, gravity works
+    3/29/2019
+        Relaxing the Point Mass Assumption, small change made a small effect
+Notes:
+    Bead Seat Diameter:
+    700C = 622mm, 700mm OD
+    650B = 584mm BSD, 650mm OD
 '''
 import math as m
 import copy
@@ -45,7 +51,7 @@ def pedal_force(state):
         return 100 # it would throw a divide
         # by zero error otherwise, so this is a handy catch condition
     else:
-        return power/state['velocity']
+        return power / state['velocity']
 
 def next_step(constants, state, vehicle_params, step):
     #INPUTS:
@@ -55,15 +61,23 @@ def next_step(constants, state, vehicle_params, step):
     #MATH:
     # F = ma
     # a = Fnet/m
-    g_force = vehicle_params['mass'] * constants['gravity'] * m.sin(
-        grade_to_radians(grade(state)))
-    net_force = pedal_force(state) - g_force
-    acceleration = net_force / vehicle_params['mass']
+    #Unpacking a few of the key parameters to make the code a little more readable
+    v = state['velocity']
+    mass = vehicle_params['point_mass']
+    inert = vehicle_params['rotating_inertia']
+    r = vehicle_params['wheel_diameter'] / 2.0
+
+    g_force = -1.0 * vehicle_params['point_mass'] * constants['gravity'] * m.sin(
+        grade_to_radians(grade(state))) #when grade is + then force is in -X direction
+    net_force = pedal_force(state) + g_force
     time_next = state['time'] + step
     distance_next = (
         state['distance'] 
         + (state['velocity'] * step))
-    velocity_next = state['velocity'] + acceleration*step
+    velocity_next = m.sqrt(
+        v ** 2 + (2 * net_force * v * step / 
+        (mass + inert/(r ** 2)))
+    )
     next_state = {
         'time' : time_next,
         'distance' : distance_next,
@@ -95,8 +109,13 @@ if __name__ == "__main__":
     course_params = {
         "course_distance" : 2656, #m
     }
+    wheel_bsd = .584 # m
+    wheel_mass = 3.1 # kg
+    inertia = 0.25 * wheel_mass * wheel_bsd ** 2
     vehicle_params = {
-        'mass' : 115 # Phil + loaded rove in kg
+        'point_mass' : 112.0, # Phil + loaded rove in kg minus Wheels + Tires
+        'rotating_inertia' : inertia, #wheels & tires
+        'wheel_diameter' : .65 # m, 650B
     }
     constants = {
         'gravity' : 9.81 #m/s^2
