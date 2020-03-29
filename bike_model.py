@@ -13,6 +13,15 @@ Edit History
         grade works, gravity works
     3/29/2019
         Relaxing the Point Mass Assumption, small change made a small effect
+        Added Air, finish time is 734.6sec
+
+Quality Checks & Results
+    Move step size 10x in either direction and make sure the finish time doesn't move
+    The above quality check works
+
+Further Complexity Ideas
+    Tire-Drag
+    Sinusoidal Power-Output
 Notes:
     Bead Seat Diameter:
     700C = 622mm, 700mm OD
@@ -53,7 +62,21 @@ def pedal_force(state):
     else:
         return power / state['velocity']
 
-def next_step(constants, state, vehicle_params, step):
+def aero_load(constants, vehicle_params, state):
+    #INPUTS:
+    # Constants, Vehicle Parameters, Vehicle State
+    #OUTPUTS:
+    # Aero Load in Newtons
+    #MATH:
+    # F = 1/2 rho * Cd * A * v^2
+    drag = 0.5 * (
+        constants['air_density'] * 
+        vehicle_params['drag_coefficient'] *
+        vehicle_params['frontal_area'] *
+        (state['velocity'] ** 2.0)
+    )
+    return drag
+def next_step(constants, vehicle_params, state, step):
     #INPUTS:
     # Vehicle State, increment time
     #OUTPUTS:
@@ -69,7 +92,10 @@ def next_step(constants, state, vehicle_params, step):
 
     g_force = -1.0 * vehicle_params['point_mass'] * constants['gravity'] * m.sin(
         grade_to_radians(grade(state))) #when grade is + then force is in -X direction
-    net_force = pedal_force(state) + g_force
+    
+    drag = aero_load(constants, vehicle_params, state)
+
+    net_force = pedal_force(state) + g_force - drag
     time_next = state['time'] + step
     distance_next = (
         state['distance'] 
@@ -99,7 +125,7 @@ def solver(constants, course_params, vehicle_params, initial_state, step):
         time_series[key] = [0.0]
     
     while state['distance'] < course_params['course_distance']:
-        state = next_step(constants, state, vehicle_params, step)
+        state = next_step(constants, vehicle_params, state, step)
         for key in state:
             time_series[key].append(state[key])
     return time_series
@@ -115,10 +141,13 @@ if __name__ == "__main__":
     vehicle_params = {
         'point_mass' : 112.0, # Phil + loaded rove in kg minus Wheels + Tires
         'rotating_inertia' : inertia, #wheels & tires
-        'wheel_diameter' : .65 # m, 650B
+        'wheel_diameter' : .65, # m, 650B
+        'drag_coefficient' : 1.0, # Unitless
+        'frontal_area' : .38 # m^2
     }
     constants = {
-        'gravity' : 9.81 #m/s^2
+        'gravity' : 9.81, #m/s^2
+        'air_density' : 1.225 #kg / m^3
     }
     initial_state = {
         "time" : 0.0, # sec
